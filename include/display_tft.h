@@ -1,10 +1,11 @@
 #include "Arduino.h"
 #include "TFT_eSPI.h" /* Please use the TFT library provided in the library. */
 #include "pin_config.h"
+#include "main.h"
 
 /* The product now has two screens, and the initialization code needs a small change in the new version. The LCD_MODULE_CMD_1 is used to define the
  * switch macro. */
-#define LCD_MODULE_CMD_1^
+#define LCD_MODULE_CMD_1
 
 
 // ---------------------- SETTINGS ---------------------- //
@@ -19,16 +20,17 @@
     #define SPRITE_HEIGHT                           TFT_WIDTH
 #endif
 
-#define BG_COLOR                                    tft.color565(40, 41, 69)
+#define BG_COLOR                                    TFT_BLACK // tft.color565(40, 41, 69)
 
-#define BAR1_COLOR                                  TFT_YELLOW
+#define BAR_COLOR_EMPTY                             TFT_GREEN
+#define BAR_COLOR_MEDIUM                            TFT_YELLOW
+#define BAR_COLOR_FULL                              tft.color565(200, 0, 0)
 #define BAR1_LOCATION_H                             27          // horizontal location of the first bar in percentage
 #define BAR2_LOCATION_H                             73          // horizontal location of the second bar in percentage
-#define BAR_PADDING                                 15           // padding around the bars in percentage
+#define BAR_PADDING                                 15          // padding around the bars in percentage
 #define BAR_WIDTH                                   40          // width of the bars in pixels
-
-
-
+#define BAR_PADDING_INNER                           2           // padding inside the bars in pixels
+#define ARROW_SIZE                                  5           // pixel
 
 
 void display_tft_init();

@@ -38,13 +38,77 @@ lcd_cmd_t lcd_st7789v[] = {
 
 
 
-void _draw_bar(int location_h, int volume_percent) {
+void _draw_bar(int location_h, int volume_percent, int volume_liters) {
     int location_h_px = location_h * SPRITE_WIDTH / 100;
 
-    int x = location_h_px - BAR_WIDTH / 2;
-    int y = BAR_PADDING * SPRITE_HEIGHT / 100;
+    int x_bar = location_h_px - BAR_WIDTH / 2;
+    int y_bar = BAR_PADDING * SPRITE_HEIGHT / 100;
 
-    sprite_lvl.drawSmoothRoundRect(x, y, BAR_WIDTH / 2, BAR_WIDTH / 2 - 1, BAR_WIDTH, SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100), TFT_WHITE, BG_COLOR);
+    int x_bar_inner = x_bar + 2 * BAR_PADDING_INNER;
+    int y_bar_inner = y_bar + 2 * BAR_PADDING_INNER + (SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100) - 4 * BAR_PADDING_INNER) * 0.01 * (100 - volume_percent);
+    int bar_inner_width = (BAR_WIDTH - 4 * BAR_PADDING_INNER);
+
+    uint16_t bar_color = volume_percent < 33 ? BAR_COLOR_EMPTY : volume_percent < 80 ? BAR_COLOR_MEDIUM : BAR_COLOR_FULL;
+
+    if (volume_percent > 2) {
+        sprite_lvl.fillSmoothRoundRect(
+        x_bar_inner,
+        y_bar_inner,
+        bar_inner_width + 1,
+        (SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100) - 4 * BAR_PADDING_INNER) * 0.01 * volume_percent + 1,
+        bar_inner_width / 2,
+        bar_color,
+        BG_COLOR);
+    }
+
+    sprite_lvl.drawSmoothRoundRect(
+        x_bar,
+        y_bar,
+        BAR_WIDTH / 2,
+        BAR_WIDTH / 2 - 1,
+        BAR_WIDTH,
+        SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100),
+        TFT_WHITE,
+        BG_COLOR);
+
+    sprite_lvl.drawWedgeLine(
+        x_bar_inner - 4 * BAR_PADDING_INNER - ARROW_SIZE,
+        y_bar_inner,
+        x_bar_inner - 4 * BAR_PADDING_INNER,
+        y_bar_inner,
+        ARROW_SIZE,
+        1,
+        TFT_WHITE,
+        BG_COLOR
+    );
+
+    sprite_lvl.drawWedgeLine(
+        x_bar_inner + 4 * BAR_PADDING_INNER + ARROW_SIZE + bar_inner_width,
+        y_bar_inner,
+        x_bar_inner + 4 * BAR_PADDING_INNER + bar_inner_width,
+        y_bar_inner,
+        ARROW_SIZE,
+        1,
+        TFT_WHITE,
+        BG_COLOR
+    );
+
+
+    String text = String(volume_liters) + " L";
+
+    sprite_lvl.setTextSize(1);
+    sprite_lvl.setTextFont(2);
+    sprite_lvl.setTextColor(TFT_WHITE);
+    sprite_lvl.setCursor(x_bar + BAR_WIDTH / 2 - (sprite_lvl.textWidth(text) / 2) + 2, (BAR_PADDING * SPRITE_HEIGHT / 100) / 2 - 6);
+    sprite_lvl.println(text);
+
+
+    text = "Tank ";
+    String number = (location_h == BAR1_LOCATION_H) ? "1" : "2";
+    text.concat(number);
+
+    sprite_lvl.setCursor(x_bar + BAR_WIDTH / 2 - (sprite_lvl.textWidth(text) / 2) + 2, SPRITE_HEIGHT - (BAR_PADDING * SPRITE_HEIGHT / 100) / 2 - 6);
+    sprite_lvl.println(text);
 }
 
 
@@ -86,33 +150,16 @@ void display_tft_init()
 void display_tft_levels(int tank1_volume, int tank2_volume)
 {
     sprite_lvl.fillSprite(BG_COLOR);
-    sprite_lvl.setTextSize(2);
-    sprite_lvl.setTextColor(TFT_WHITE, TFT_DARKGREY);
-    sprite_lvl.setCursor(0, 0);
-    sprite_lvl.print("Waste level tank 1  [L]: ");
-    sprite_lvl.println(tank1_volume);
-    sprite_lvl.print("Waste level tank 2  [L]: ");
-    sprite_lvl.println(tank2_volume);
 
+    int full_tank = calculate_liters(TANK_LVL_FULL_CM);
 
-    _draw_bar(BAR1_LOCATION_H, tank1_volume);
-    _draw_bar(BAR2_LOCATION_H, tank2_volume);
+    int tank1_percentage = map(tank1_volume, 0, full_tank, 0, 100);
+    int tank2_percentage = map(tank2_volume, 0, full_tank, 0, 100);
 
-
+    _draw_bar(BAR1_LOCATION_H, tank1_percentage, tank1_volume);
+    _draw_bar(BAR2_LOCATION_H, tank2_percentage, tank2_volume);
 
     sprite_lvl.pushSprite(0, 0);
-}
-
-void display_tft_levels_old(int tank1_volume, int tank2_volume)
-{
-    tft.fillScreen(TFT_BLACK);
-    tft.setCursor(0, 0);
-    tft.setTextSize(2);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.print("Waste level tank 1  [L]: ");
-    tft.println(tank1_volume);
-    tft.print("Waste level tank 2  [L]: ");
-    tft.println(tank2_volume);
 }
 
 void display_tft_error(int elapsedTime)
