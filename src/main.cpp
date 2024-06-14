@@ -3,6 +3,7 @@
 #include "LoRa_E220.h"
 #include "TFT_eSPI.h"
 
+#include "main.h"
 #include "pin_config.h"
 // #include "display.h"
 #include "display_tft.h"
@@ -38,10 +39,6 @@ struct tankData {
   int tank1_measurement;
   int tank2_measurement;
 };
-
-#define TANK_DIAMETER_CM                                  200 // in cm
-#define TANK_LVL_EMPTY_CM                                 400 // in cm
-#define TANK_LVL_FULL_CM                                  20 // in cm
 
 int calculate_liters(int measurement) {
   measurement = measurement < TANK_LVL_FULL_CM ? TANK_LVL_FULL_CM : measurement;
@@ -81,6 +78,7 @@ void loop() {
   static unsigned long lastMessageTime = 0;
   unsigned long currentTime = millis();
 
+
   if (e220ttl.available() > 1) {
     ResponseStructContainer rsc = e220ttl.receiveMessage(sizeof(tankData));
     tankData currentTankData = *(tankData*) rsc.data;
@@ -107,4 +105,13 @@ void loop() {
       delay(1000);
     }
   }
+  
+ /*
+  int full = calculate_liters(TANK_LVL_FULL_CM);
+
+  int test_vol1 = full / 2 * sin(millis() / 2000.0) + full / 2;
+  int test_vol2 = full / 2 * cos(millis() / 2000.0) + full / 2;
+
+  display_tft_levels(test_vol1, test_vol2);*/
+
 }
