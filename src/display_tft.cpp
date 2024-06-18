@@ -36,7 +36,33 @@ lcd_cmd_t lcd_st7789v[] = {
 
 
 
+void wrapText(String& text, int width) {
+    int textLength = text.length();
+    int lineWidth = 0;
+    int lastSpaceIndex = -1;
 
+    for (int i = 0; i < textLength; i++) {
+        char currentChar = text.charAt(i);
+        int charWidth = sprite_msg.textWidth(String(currentChar));
+
+        if (currentChar == ' ') {
+            lastSpaceIndex = i;
+        }
+
+        if (lineWidth + charWidth > width) {
+            if (lastSpaceIndex != -1) {
+                text.setCharAt(lastSpaceIndex, '\n');
+                lineWidth = lineWidth - sprite_msg.textWidth(text.substring(0, lastSpaceIndex)) - sprite_msg.textWidth(" ");
+                lastSpaceIndex = -1;
+            } 
+            else {
+                text = text.substring(0, i) + "\n" + text.substring(i);
+                lineWidth = 0; }
+        }
+
+        lineWidth += charWidth;
+    }
+}
 
 void _draw_bar(int location_h, int volume_percent, int volume_liters) {
     int location_h_px = location_h * SPRITE_WIDTH / 100;
@@ -52,13 +78,13 @@ void _draw_bar(int location_h, int volume_percent, int volume_liters) {
 
     if (volume_percent > 2) {
         sprite_lvl.fillSmoothRoundRect(
-        x_bar_inner,
-        y_bar_inner,
-        bar_inner_width + 1,
-        (SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100) - 4 * BAR_PADDING_INNER) * 0.01 * volume_percent + 1,
-        bar_inner_width / 2,
-        bar_color,
-        BG_COLOR);
+            x_bar_inner,
+            y_bar_inner,
+            bar_inner_width + 1,
+            (SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100) - 4 * BAR_PADDING_INNER) * 0.01 * volume_percent + 1,
+            bar_inner_width / 2,
+            bar_color,
+            BG_COLOR);
     }
 
     sprite_lvl.drawSmoothRoundRect(
@@ -112,7 +138,7 @@ void _draw_bar(int location_h, int volume_percent, int volume_liters) {
 }
 
 
-void display_tft_init()
+void display_init()
 {
     // This IO15 must be set to HIGH, otherwise nothing will be displayed when USB is not connected.
     pinMode(PIN_POWER_ON, OUTPUT);
@@ -147,29 +173,114 @@ void display_tft_init()
 
 
 
-void display_tft_levels(int tank1_volume, int tank2_volume)
+void display_levels(uint8_t *sensor_buffer1, uint8_t *sensor_buffer2)
 {
+    remoteSensor_t sensor1 = *(remoteSensor_t *) sensor_buffer1;
+    remoteSensor_t sensor2 = *(remoteSensor_t *) sensor_buffer2;
+
     sprite_lvl.fillSprite(BG_COLOR);
 
-    int full_tank = calculate_liters(TANK_LVL_FULL_CM);
-
-    int tank1_percentage = map(tank1_volume, 0, full_tank, 0, 100);
-    int tank2_percentage = map(tank2_volume, 0, full_tank, 0, 100);
-
-    _draw_bar(BAR1_LOCATION_H, tank1_percentage, tank1_volume);
-    _draw_bar(BAR2_LOCATION_H, tank2_percentage, tank2_volume);
+    _draw_bar(BAR1_LOCATION_H, sensor1.volume_percent, sensor1.volume_liters);
+    _draw_bar(BAR2_LOCATION_H, sensor2.volume_percent, sensor2.volume_liters);
 
     sprite_lvl.pushSprite(0, 0);
 }
 
-void display_tft_error(int elapsedTime)
-{
-    tft.fillScreen(TFT_BLACK);
-    tft.setCursor(0, 0);
-    tft.setTextSize(2);
-    tft.setTextColor(TFT_GREEN, TFT_BLACK);
-    tft.print("Error, time since last message [ms]: ");
-    tft.println(elapsedTime);
+void display_msg_box(int center_x, int center_y, int width, String msg, uint16_t color = TFT_BLACK) {
+    int box_padding = 4;
+    TFT_eSprite sprite_box = TFT_eSprite(&tft);
+
+    int number_lines = ceil((sprite_lvl.textWidth(msg)) / (float) (width - 2 * box_padding));
+    int sprite_height =  16 * number_lines + 2 * box_padding;
+
+    sprite_box.createSprite(width, sprite_height);
+    sprite_box.fillSmoothRoundRect(
+        0,
+        0,
+        width,
+        sprite_height,
+        10,
+        color,
+        BG_COLOR);
+
+    sprite_box.drawSmoothRoundRect(
+        0,
+        0,
+        10,
+        9,
+        width,
+        sprite_height,
+        TFT_WHITE,
+        BG_COLOR);
+
+    // set text properties
+    sprite_box.setTextSize(1);
+    sprite_box.setTextFont(2);
+    sprite_box.setTextColor(TFT_WHITE);
+    
+    wrapText(msg, width - 2 * box_padding);
+
+    int line_number = 0;
+    int startPos = 0;
+    int endPos = msg.indexOf('\n');
+    while (endPos != -1) {
+        String substring = msg.substring(startPos, endPos);
+        sprite_box.drawCentreString(substring, width / 2, line_number * 16 + box_padding, 2);
+        startPos = endPos + 1;
+        line_number++;
+        endPos = msg.indexOf('\n', startPos);
+    }
+
+    // Draw the last substring
+    String lastSubstring = msg.substring(startPos);
+    sprite_box.drawCentreString(lastSubstring, width / 2, line_number * 16 + box_padding, 2);
+
+    /*sprite_box.drawSmoothRoundRect(
+        0,
+        0,
+        10,
+        9,
+        width,
+        sprite_height,
+        TFT_WHITE,
+        BG_COLOR);*/
+
+    sprite_box.pushSprite(center_x - width / 2, center_y - sprite_height / 2);
+    sprite_box.deleteSprite();
+}
+
+void display_error(uint8_t *sensor_buffer) {
+    remoteSensor_t sensor = *(remoteSensor_t *) sensor_buffer;
+  
+    String msg = "";
+    
+    switch(sensor.error)
+    {
+        case SENSOR_ERROR_NONE:
+            return;
+        case SENSOR_ERROR_TIMEOUT:
+            msg.concat("Keine Antwort");
+            break;
+        case SENSOR_ERROR_INVALID_DATA:
+            msg.concat("Sensor verschmutzt");
+            break;
+        case SENSOR_ERROR_SEND:
+            msg.concat("Sendefehler");
+            break;
+        case SENSOR_ERROR_RECEIVE:
+            msg.concat("Empfangsfehler");
+            break;
+        case SENSOR_ERROR_ID:
+            msg.concat("Falsche ID");
+            break;
+        default:
+            msg.concat("Unbekannter Fehler");
+    }
+
+    if (sensor.sensor_id == 1)
+        display_msg_box(SPRITE_WIDTH / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, msg);
+
+    else display_msg_box(3 * SPRITE_WIDTH / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, msg);
 }
 
 

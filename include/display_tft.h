@@ -33,6 +33,7 @@
 #define ARROW_SIZE                                  5           // pixel
 
 
-void display_tft_init();
-void display_tft_levels(int tank1_volume, int tank2_volume);
-void display_tft_error(int elapsedTime);
+void display_init();
+void display_levels(uint8_t *sensor_buffer1, uint8_t *sensor_buffer2);
+void display_error(uint8_t *sensor_buffer);
+void display_msg_box(int center_x, int center_y, int width, String msg, uint16_t color);
