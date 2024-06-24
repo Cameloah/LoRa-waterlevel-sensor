@@ -3,3 +3,4 @@
 
 
 void lora_set_config(LoRa_E220& e220ttl);
+void lora_get_config(LoRa_E220& lora_obj);

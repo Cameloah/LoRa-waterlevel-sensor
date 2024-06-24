@@ -3,7 +3,7 @@
 
 
 TFT_eSPI tft = TFT_eSPI();
-TFT_eSprite sprite_lvl = TFT_eSprite(&tft);
+TFT_eSprite sprite_total = TFT_eSprite(&tft);
 TFT_eSprite sprite_msg = TFT_eSprite(&tft);
 
 #if defined(LCD_MODULE_CMD_1)
@@ -35,11 +35,11 @@ lcd_cmd_t lcd_st7789v[] = {
 
 
 
-
-void wrapText(String& text, int width) {
+int _wrapText(String& text, int width) {
     int textLength = text.length();
     int lineWidth = 0;
     int lastSpaceIndex = -1;
+    int numberLineBreaks = 0;
 
     for (int i = 0; i < textLength; i++) {
         char currentChar = text.charAt(i);
@@ -47,6 +47,10 @@ void wrapText(String& text, int width) {
 
         if (currentChar == ' ') {
             lastSpaceIndex = i;
+        }
+        else if (currentChar == '\n') {
+            numberLineBreaks++;
+            lineWidth = 0;
         }
 
         if (lineWidth + charWidth > width) {
@@ -58,10 +62,13 @@ void wrapText(String& text, int width) {
             else {
                 text = text.substring(0, i) + "\n" + text.substring(i);
                 lineWidth = 0; }
+            numberLineBreaks++;
         }
 
         lineWidth += charWidth;
     }
+
+    return numberLineBreaks;
 }
 
 void _draw_bar(int location_h, int volume_percent, int volume_liters) {
@@ -74,20 +81,53 @@ void _draw_bar(int location_h, int volume_percent, int volume_liters) {
     int y_bar_inner = y_bar + 2 * BAR_PADDING_INNER + (SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100) - 4 * BAR_PADDING_INNER) * 0.01 * (100 - volume_percent);
     int bar_inner_width = (BAR_WIDTH - 4 * BAR_PADDING_INNER);
 
-    uint16_t bar_color = volume_percent < 33 ? BAR_COLOR_EMPTY : volume_percent < 80 ? BAR_COLOR_MEDIUM : BAR_COLOR_FULL;
+    //uint16_t bar_color = volume_percent < 33 ? BAR_COLOR_EMPTY : volume_percent < 80 ? BAR_COLOR_MEDIUM : BAR_COLOR_FULL;
+    uint16_t bar_color;
+    if (volume_percent < 50)
+        bar_color = tft.alphaBlend(map(volume_percent, 0, 50, 0, 255), BAR_COLOR_MEDIUM, BAR_COLOR_EMPTY);
+    else bar_color = tft.alphaBlend(map(volume_percent, 50, 100, 0, 255), BAR_COLOR_FULL, BAR_COLOR_MEDIUM);
+
 
     if (volume_percent > 2) {
-        sprite_lvl.fillSmoothRoundRect(
+        sprite_total.fillSmoothRoundRect(
             x_bar_inner,
             y_bar_inner,
             bar_inner_width + 1,
             (SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100) - 4 * BAR_PADDING_INNER) * 0.01 * volume_percent + 1,
             bar_inner_width / 2,
-            bar_color,
+            tft.alphaBlend(90, 0x0000, bar_color),
             BG_COLOR);
+  
+        sprite_total.fillSmoothRoundRect(
+            x_bar_inner - bar_inner_width * 0.2,
+            y_bar_inner - bar_inner_width * 0.2,
+            bar_inner_width + 1,
+            (SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100) - 4 * BAR_PADDING_INNER) * 0.01 * volume_percent + 1,
+            bar_inner_width / 2,
+            bar_color);
+
+        sprite_total.fillSmoothRoundRect(
+            x_bar_inner + bar_inner_width * 0.1,
+            y_bar_inner + bar_inner_width / 2,
+            bar_inner_width * 0.2,
+            (SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100) - 4 * BAR_PADDING_INNER) * 0.01 * volume_percent + 1 - 1.2 * bar_inner_width,
+            bar_inner_width * 0.2 / 2,
+            tft.alphaBlend(80, 0xFFFF, bar_color));    
     }
 
-    sprite_lvl.drawSmoothRoundRect(
+    int bar_cover_paddding = bar_inner_width * 0.5;
+    int correction = 1;
+    sprite_total.drawSmoothRoundRect(
+        x_bar_inner - bar_cover_paddding - correction,
+        y_bar_inner - bar_cover_paddding - correction,
+        bar_inner_width / 2 + bar_cover_paddding,
+        bar_inner_width / 2,
+        bar_inner_width + 2 * bar_cover_paddding + 2 * correction,
+        (SPRITE_HEIGHT - (2 * BAR_PADDING * SPRITE_HEIGHT / 100) - 4 * BAR_PADDING_INNER) * 0.01 * volume_percent + 1 + 2 * bar_cover_paddding + 2 * correction,
+        BG_COLOR,
+        BG_COLOR);
+
+    sprite_total.drawSmoothRoundRect(
         x_bar,
         y_bar,
         BAR_WIDTH / 2,
@@ -97,7 +137,7 @@ void _draw_bar(int location_h, int volume_percent, int volume_liters) {
         TFT_WHITE,
         BG_COLOR);
 
-    sprite_lvl.drawWedgeLine(
+    sprite_total.drawWedgeLine(
         x_bar_inner - 4 * BAR_PADDING_INNER - ARROW_SIZE,
         y_bar_inner,
         x_bar_inner - 4 * BAR_PADDING_INNER,
@@ -108,7 +148,7 @@ void _draw_bar(int location_h, int volume_percent, int volume_liters) {
         BG_COLOR
     );
 
-    sprite_lvl.drawWedgeLine(
+    sprite_total.drawWedgeLine(
         x_bar_inner + 4 * BAR_PADDING_INNER + ARROW_SIZE + bar_inner_width,
         y_bar_inner,
         x_bar_inner + 4 * BAR_PADDING_INNER + bar_inner_width,
@@ -122,19 +162,19 @@ void _draw_bar(int location_h, int volume_percent, int volume_liters) {
 
     String text = String(volume_liters) + " L";
 
-    sprite_lvl.setTextSize(1);
-    sprite_lvl.setTextFont(2);
-    sprite_lvl.setTextColor(TFT_WHITE);
-    sprite_lvl.setCursor(x_bar + BAR_WIDTH / 2 - (sprite_lvl.textWidth(text) / 2) + 2, (BAR_PADDING * SPRITE_HEIGHT / 100) / 2 - 6);
-    sprite_lvl.println(text);
+    sprite_total.setTextSize(1);
+    sprite_total.setTextFont(2);
+    sprite_total.setTextColor(TFT_WHITE);
+    sprite_total.setCursor(x_bar + BAR_WIDTH / 2 - (sprite_total.textWidth(text) / 2) + 2, (BAR_PADDING * SPRITE_HEIGHT / 100) / 2 - 6);
+    sprite_total.println(text);
 
 
     text = "Tank ";
     String number = (location_h == BAR1_LOCATION_H) ? "1" : "2";
     text.concat(number);
 
-    sprite_lvl.setCursor(x_bar + BAR_WIDTH / 2 - (sprite_lvl.textWidth(text) / 2) + 2, SPRITE_HEIGHT - (BAR_PADDING * SPRITE_HEIGHT / 100) / 2 - 6);
-    sprite_lvl.println(text);
+    sprite_total.setCursor(x_bar + BAR_WIDTH / 2 - (sprite_total.textWidth(text) / 2) + 2, SPRITE_HEIGHT - (BAR_PADDING * SPRITE_HEIGHT / 100) / 2 - 6);
+    sprite_total.println(text);
 }
 
 
@@ -148,7 +188,7 @@ void display_init()
     tft.setRotation(ROTATION);
     tft.fillScreen(TFT_BLACK);
 
-    sprite_lvl.createSprite(SPRITE_WIDTH, SPRITE_HEIGHT);
+    sprite_total.createSprite(SPRITE_WIDTH, SPRITE_HEIGHT);
 
 
 #if defined(LCD_MODULE_CMD_1)
@@ -164,33 +204,32 @@ void display_init()
     }
 #endif
 
-    // Turn on backlight
     ledcSetup(0, 2000, 8);
     ledcAttachPin(PIN_LCD_BL, 0);
     ledcWrite(0, 255);
 
 }
 
-
+void display_update() {
+    sprite_total.pushSprite(0, 0);
+    }
 
 void display_levels(uint8_t *sensor_buffer1, uint8_t *sensor_buffer2)
 {
     remoteSensor_t sensor1 = *(remoteSensor_t *) sensor_buffer1;
     remoteSensor_t sensor2 = *(remoteSensor_t *) sensor_buffer2;
 
-    sprite_lvl.fillSprite(BG_COLOR);
+    sprite_total.fillSprite(BG_COLOR);
 
     _draw_bar(BAR1_LOCATION_H, sensor1.volume_percent, sensor1.volume_liters);
     _draw_bar(BAR2_LOCATION_H, sensor2.volume_percent, sensor2.volume_liters);
-
-    sprite_lvl.pushSprite(0, 0);
 }
 
-void display_msg_box(int center_x, int center_y, int width, String msg, uint16_t color = TFT_BLACK) {
-    int box_padding = 4;
+void display_msg_box(int center_x, int center_y, int width, String msg, bool center, uint16_t color = TFT_BLACK) {
+    int box_padding = 6;
     TFT_eSprite sprite_box = TFT_eSprite(&tft);
 
-    int number_lines = ceil((sprite_lvl.textWidth(msg)) / (float) (width - 2 * box_padding));
+    int number_lines = _wrapText(msg, width - 2 * box_padding) + 1;
     int sprite_height =  16 * number_lines + 2 * box_padding;
 
     sprite_box.createSprite(width, sprite_height);
@@ -217,15 +256,19 @@ void display_msg_box(int center_x, int center_y, int width, String msg, uint16_t
     sprite_box.setTextSize(1);
     sprite_box.setTextFont(2);
     sprite_box.setTextColor(TFT_WHITE);
-    
-    wrapText(msg, width - 2 * box_padding);
+    sprite_box.setCursor(box_padding, box_padding);
 
     int line_number = 0;
     int startPos = 0;
     int endPos = msg.indexOf('\n');
     while (endPos != -1) {
         String substring = msg.substring(startPos, endPos);
-        sprite_box.drawCentreString(substring, width / 2, line_number * 16 + box_padding, 2);
+        if (center)
+            sprite_box.drawCentreString(substring, width / 2, line_number * 16 + box_padding, 2);
+        else {
+            sprite_box.setCursor(box_padding, line_number * 16 + box_padding);
+            sprite_box.print(substring);
+        }
         startPos = endPos + 1;
         line_number++;
         endPos = msg.indexOf('\n', startPos);
@@ -233,19 +276,15 @@ void display_msg_box(int center_x, int center_y, int width, String msg, uint16_t
 
     // Draw the last substring
     String lastSubstring = msg.substring(startPos);
-    sprite_box.drawCentreString(lastSubstring, width / 2, line_number * 16 + box_padding, 2);
+    if (center) 
+        sprite_box.drawCentreString(lastSubstring, width / 2, line_number * 16 + box_padding, 2);
+    else {
+        sprite_box.setCursor(box_padding, line_number * 16 + box_padding);
+        sprite_box.print(lastSubstring);
+    }
 
-    /*sprite_box.drawSmoothRoundRect(
-        0,
-        0,
-        10,
-        9,
-        width,
-        sprite_height,
-        TFT_WHITE,
-        BG_COLOR);*/
 
-    sprite_box.pushSprite(center_x - width / 2, center_y - sprite_height / 2);
+    sprite_box.pushToSprite(&sprite_total, center_x - width / 2, center_y - sprite_height / 2);
     sprite_box.deleteSprite();
 }
 
@@ -278,9 +317,31 @@ void display_error(uint8_t *sensor_buffer) {
     }
 
     if (sensor.sensor_id == 1)
-        display_msg_box(SPRITE_WIDTH / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, msg);
+        display_msg_box(SPRITE_WIDTH / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, msg, true, BG_COLOR);
 
-    else display_msg_box(3 * SPRITE_WIDTH / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, msg);
+    else display_msg_box(3 * SPRITE_WIDTH / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, msg, true, BG_COLOR);
+}
+
+void display_advanced_data(uint8_t* sensor_buffer) {
+    remoteSensor_t sensor = *(remoteSensor_t *) sensor_buffer;
+    String msg = "Tank " + String(sensor.sensor_id) + "\n" +
+                 "Sensor ID: " + String(sensor.data.tank_id) + "\n" +
+                 "Sensormessung: " + String(sensor.data.tank_measurement) + " cm\n" +
+                 "Batteriespannung: " + String(sensor.data.battery_voltage/1000.) + "V\n" +
+                 "Empfangsstaerke: " + String(map(sensor.rssi, 0, 255, 0, 100)) + "%";
+    
+    int padding = 5; // pixels
+    int x = ROTATION % 2 ? SPRITE_WIDTH / 4 + (sensor.sensor_id - 1) * SPRITE_WIDTH / 2 : SPRITE_WIDTH / 2;
+    int y = ROTATION % 2 ? SPRITE_HEIGHT / 2 : SPRITE_HEIGHT / 4 + (sensor.sensor_id - 1) * SPRITE_HEIGHT / 2;
+    display_msg_box(x, y, TFT_WIDTH, msg, false, BG_COLOR);
+}
+
+void display_advanced_page() {
+    sprite_total.fillSprite(BG_COLOR);
+    // set text properties
+
+    display_advanced_data((uint8_t*) &sensor_1);
+    display_advanced_data((uint8_t*) &sensor_2);
 }
 
 

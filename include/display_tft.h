@@ -20,7 +20,7 @@
     #define SPRITE_HEIGHT                           TFT_WIDTH
 #endif
 
-#define BG_COLOR                                    TFT_BLACK // tft.color565(40, 41, 69)
+#define BG_COLOR                                    TFT_BLACK
 
 #define BAR_COLOR_EMPTY                             TFT_GREEN
 #define BAR_COLOR_MEDIUM                            TFT_YELLOW
@@ -34,6 +34,8 @@
 
 
 void display_init();
+void display_update();
 void display_levels(uint8_t *sensor_buffer1, uint8_t *sensor_buffer2);
 void display_error(uint8_t *sensor_buffer);
-void display_msg_box(int center_x, int center_y, int width, String msg, uint16_t color);
+void display_msg_box(int center_x, int center_y, int width, String msg, bool center, uint16_t color);
+void display_advanced_page();

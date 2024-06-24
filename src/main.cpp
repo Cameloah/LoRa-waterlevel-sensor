@@ -1,5 +1,6 @@
 
 #include <Arduino.h>
+
 #include "main.h"
 
 
@@ -9,8 +10,6 @@
 #define PIN_E220_AUX                                      21
 #define PIN_E220_M0                                       13
 #define PIN_E220_M1                                       12
-
-#define DESTINATION_ADDL                                  2
 
 LoRa_E220 e220ttl(PIN_ESP_UART2_TX,
                   PIN_ESP_UART1_RX,
@@ -33,6 +32,9 @@ static unsigned long lastMeasurementTime = 0;
 remoteSensor_t sensor_1;
 remoteSensor_t sensor_2;
 
+bool flag_warning_displayed = false;
+unsigned long last_warning_time = 0;
+
 int calculate_liters(int measurement) {
   measurement = measurement < TANK_LVL_FULL_CM ? TANK_LVL_FULL_CM : measurement;
   measurement = measurement > TANK_LVL_EMPTY_CM ? TANK_LVL_EMPTY_CM : measurement;
@@ -43,9 +45,11 @@ int calculate_liters(int measurement) {
 }
 
 void request_sensor_data(remoteSensor_t &sensor);
-void handle_error(remoteSensor_t &sensor);
+void print_error(remoteSensor_t &sensor);
 void update_sensor_data();
-bool warning_full();
+void warning_full();
+void warning_low_batt();
+
 
 
 // ---------------------- SETUP ---------------------- //
@@ -64,8 +68,8 @@ void setup() {
   // --------- initialize data buffers --------- //
   memset(&sensor_1, 0x00, sizeof(sensor_1));
   memset(&sensor_2, 0x00, sizeof(sensor_2));
-  sensor_1.address_L = 0x03;
-  sensor_2.address_L = 0x04;
+  sensor_1.address_L = 3;
+  sensor_2.address_L = 4;
   sensor_1.sensor_id = 1;
   sensor_2.sensor_id = 2;
   sensor_1.full_liters = calculate_liters(TANK_LVL_FULL_CM);
@@ -74,81 +78,89 @@ void setup() {
   sensor_2.error = SENSOR_ERROR_NONE;
 
   // --------- request initial data --------- //
-  update_sensor_data();
+  display_msg_box(SPRITE_WIDTH / 2, SPRITE_HEIGHT / 2, SPRITE_WIDTH - 5, "Frage Sensordaten ab...", true, TFT_BLACK);
+  display_update();
+  request_sensor_data(sensor_1);
+  request_sensor_data(sensor_2);
 }
  
 
 
 // ---------------------- LOOP ---------------------- //
-bool flag_warning_displayed = false;
-unsigned long last_warning_time = 0;
+int page_index = 0;
+unsigned long timestamp_advanced_page = 0;
+bool button_pressed = false;
+
 void loop() {
   // ------------------ pull measurement ------------------ //
-  unsigned long currentTime = millis();
+  if (millis() - lastMeasurementTime >= MEASUREMENT_INTERVAL) {
+    request_sensor_data(sensor_1);
+    request_sensor_data(sensor_2);
+  }
 
-  if (currentTime - lastMeasurementTime >= MEASUREMENT_INTERVAL)
-    update_sensor_data();
 
-
-
-  if(digitalRead(GPIO_NUM_14) == LOW) {
+  if(digitalRead(GPIO_NUM_14) == LOW && !button_pressed) {
     unsigned long pressTime = millis();
     while (digitalRead(GPIO_NUM_14) == LOW) {
       if (millis() - pressTime > 1000) {
         // state machine trigger, switch to advanced display
-        display_levels((uint8_t*) &sensor_1, (uint8_t*) &sensor_2);
-        display_msg_box(SPRITE_WIDTH / 2, SPRITE_HEIGHT / 2, SPRITE_WIDTH - 5, "Erweiterte Anzeige...", TFT_BLACK);
-        delay(2000);
-        display_levels((uint8_t*) &sensor_1, (uint8_t*) &sensor_2);
+        page_index = !page_index;
+        timestamp_advanced_page = millis();
+        button_pressed = true;
         return;
       }
       delay(10);
     }
 
+    display_msg_box(SPRITE_WIDTH / 2, SPRITE_HEIGHT / 2, SPRITE_WIDTH - 5, "Frage Sensordaten ab...", true, TFT_BLACK);
+    display_update();
+    request_sensor_data(sensor_1);
+    request_sensor_data(sensor_2);
+  }
+
+  if(digitalRead(GPIO_NUM_14) == HIGH)
+    button_pressed = false;
+
+  if(millis() - timestamp_advanced_page > TIME_ADVANCED_PAGE)
+    page_index = 0;
+  
+
+  switch (page_index)
+  {
+  case 1:
+    display_advanced_page();
+    break;
+
+  default:
     display_levels((uint8_t*) &sensor_1, (uint8_t*) &sensor_2);
-    display_msg_box(SPRITE_WIDTH / 2, SPRITE_HEIGHT / 2, SPRITE_WIDTH - 5, "Frage Sensordaten ab...", TFT_BLACK);
-    update_sensor_data();
+    warning_full();
+
+    if ((millis() / 2000) % 2)
+      warning_low_batt();
+
+    display_error((uint8_t*) &sensor_1);
+    display_error((uint8_t*) &sensor_2);
   }
-
-  if (!flag_warning_displayed && millis() - last_warning_time > 1000) {
-    flag_warning_displayed = warning_full();
-    last_warning_time = millis();
-  }
-
-  if (flag_warning_displayed && millis() - last_warning_time > 1000) {
-    display_levels((uint8_t*) &sensor_1, (uint8_t*) &sensor_2);
-    flag_warning_displayed = false;
-    last_warning_time = millis();
-  }
-
-
-
-
-  // ------------------ test display ------------------ //
-
- /*
-  int full = calculate_liters(TANK_LVL_FULL_CM);
-
-  int test_vol1 = full / 2 * sin(millis() / 2000.0) + full / 2;
-  int test_vol2 = full / 2 * cos(millis() / 2000.0) + full / 2;
-
-  display_levels(test_vol1, test_vol2);*/
-
+  
+  display_update();
 }
 
-bool warning_full() {
-  bool retval = false;
-  if (sensor_1.error == SENSOR_ERROR_NONE && sensor_1.volume_liters > sensor_1.full_liters - TANK_LITERS_RESERVE) {
-    display_msg_box(SPRITE_WIDTH / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, "VOLL!", TFT_RED);
-    retval = true;
-  }
 
-  if (sensor_2.error == SENSOR_ERROR_NONE && sensor_2.volume_liters > sensor_2.full_liters - TANK_LITERS_RESERVE) {
-    display_msg_box(SPRITE_WIDTH * 3 / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, "VOLL!", TFT_RED);
-    retval = true;
-  }
 
-  return retval;
+void warning_full() {
+  if (sensor_1.error == SENSOR_ERROR_NONE && sensor_1.volume_liters > sensor_1.full_liters - TANK_LITERS_RESERVE)
+    display_msg_box(SPRITE_WIDTH / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, "VOLL!", true, TFT_RED);
+
+  if (sensor_2.error == SENSOR_ERROR_NONE && sensor_2.volume_liters > sensor_2.full_liters - TANK_LITERS_RESERVE)
+    display_msg_box(SPRITE_WIDTH * 3 / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, "VOLL!", true, TFT_RED);
+}
+
+void warning_low_batt() {
+  if ((sensor_1.error == SENSOR_ERROR_NONE || sensor_1.error == SENSOR_ERROR_INVALID_DATA) && sensor_1.data.battery_voltage < BATTERY_LOW_VOLTAGE)
+    display_msg_box(SPRITE_WIDTH / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, "Akku schwach!", true, TFT_BLACK);
+
+  if ((sensor_2.error == SENSOR_ERROR_NONE || sensor_2.error == SENSOR_ERROR_INVALID_DATA) && sensor_2.data.battery_voltage < BATTERY_LOW_VOLTAGE)
+    display_msg_box(SPRITE_WIDTH * 3 / 4, SPRITE_HEIGHT / 2, SPRITE_WIDTH / 2 - 4, "Akku schwach!", true, TFT_BLACK);
 }
 
 void request_sensor_data(remoteSensor_t &sensor) {
@@ -162,15 +174,15 @@ void request_sensor_data(remoteSensor_t &sensor) {
     return;
   }
 
-  e220ttl.setMode(MODE_0_NORMAL);
 
+  e220ttl.setMode(MODE_0_NORMAL);
   ResponseStructContainer rsc;
 
   unsigned long currentTime = millis();
 
   while (true) {
     if (e220ttl.available() > 1) {
-      rsc = e220ttl.receiveMessage(sizeof(sensor.data));
+      rsc = e220ttl.receiveMessageRSSI(sizeof(sensor.data));
       break;
     }
 
@@ -189,6 +201,7 @@ void request_sensor_data(remoteSensor_t &sensor) {
   }
 
   sensor.data = *(tankData_t*) rsc.data;
+  sensor.rssi = rsc.rssi;
 
   if (sensor.data.tank_id != sensor.sensor_id) {
     sensor.error = SENSOR_ERROR_ID;
@@ -200,11 +213,13 @@ void request_sensor_data(remoteSensor_t &sensor) {
     return;
   }
 
+  sensor.error = SENSOR_ERROR_NONE;
+
   sensor.volume_liters = calculate_liters(sensor.data.tank_measurement);
   sensor.volume_percent = sensor.volume_liters * 100 / sensor.full_liters;
 }
 
-void handle_error(remoteSensor_t &sensor) {
+void print_error(remoteSensor_t &sensor) {
   switch (sensor.error) {
     case SENSOR_ERROR_NONE:
       return;
@@ -226,15 +241,4 @@ void handle_error(remoteSensor_t &sensor) {
     default:
       Serial.println("Error: Unknown");
   }
-
-  display_error((uint8_t*) &sensor);
-}
-
-
-void update_sensor_data() {
-  request_sensor_data(sensor_1);
-  request_sensor_data(sensor_2);
-  display_levels((uint8_t*) &sensor_1, (uint8_t*) &sensor_2);
-  handle_error(sensor_1);
-  handle_error(sensor_2);
 }

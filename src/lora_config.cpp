@@ -20,7 +20,7 @@
  */
 
 
-// #define FREQUENCY_868
+#define FREQUENCY_868
 #define LoRa_E220_DEBUG
 
 #include "lora_config.h"
@@ -44,7 +44,7 @@ void lora_set_config(LoRa_E220& e220ttl) {
 
 
 
-	configuration.ADDL = 0x03;  // First part of address
+	configuration.ADDL = 0x02;  // First part of address
 	configuration.ADDH = 0x00; // Second part
 
 	configuration.CHAN = 18; // Communication channel
@@ -57,7 +57,7 @@ void lora_set_config(LoRa_E220& e220ttl) {
 	configuration.OPTION.RSSIAmbientNoise = RSSI_AMBIENT_NOISE_DISABLED; // Need to send special command
 	configuration.OPTION.transmissionPower = POWER_22; // Device power
 
-	configuration.TRANSMISSION_MODE.enableRSSI = RSSI_DISABLED; // Enable RSSI info
+	configuration.TRANSMISSION_MODE.enableRSSI = RSSI_ENABLED; // Enable RSSI info
 	configuration.TRANSMISSION_MODE.fixedTransmission = FT_FIXED_TRANSMISSION; // Enable repeater mode
 	configuration.TRANSMISSION_MODE.enableLBT = LBT_DISABLED; // Check interference
 	configuration.TRANSMISSION_MODE.WORPeriod = WOR_2000_011; // WOR timing
@@ -76,6 +76,24 @@ void lora_set_config(LoRa_E220& e220ttl) {
 	Serial.println(c.status.code);
 
 	_printParameters(configuration);
+	c.close();
+}
+
+void lora_get_config(LoRa_E220& lora_obj) {
+	
+	ResponseStructContainer c;
+	c = lora_obj.getConfiguration();
+	Serial.println(c.status.getResponseDescription());
+	Serial.println(c.status.code);
+	if (c.status.code != E220_SUCCESS) {
+		return;
+		c.close();
+	}
+
+	// It's important get configuration pointer before all other operation
+	Configuration configuration = *(Configuration*) c.data;
+	_printParameters(configuration);
+
 	c.close();
 }
 

@@ -7,14 +7,17 @@
 #include "display_tft.h"
 
 
-#define TANK_DIAMETER_CM                                  200 // in cm
-#define TANK_LVL_EMPTY_CM                                 400 // in cm
-#define TANK_LVL_FULL_CM                                  20 // in cm
+#define TANK_DIAMETER_CM                                  220 // in cm
+#define TANK_LVL_EMPTY_CM                                 270 // in cm
+#define TANK_LVL_FULL_CM                                  30 // in cm
 #define TANK_LITERS_RESERVE                               500 // in liters
 
-#define MEASUREMENT_INTERVAL                              300000 // in milliseconds
+#define MEASUREMENT_INTERVAL                              300000 // in milliseconds --- 5 min
 #define RESPONSE_TIMEOUT                                  2000 + 3000 // 2s need for wakeup, + timout in milliseconds
 
+#define BATTERY_LOW_VOLTAGE                               3600 // in mV 
+
+#define TIME_ADVANCED_PAGE                                30000
 
 
 // ---------------------- DATA ---------------------- //
@@ -43,7 +46,10 @@ typedef struct {
   int volume_liters;
   int volume_percent;
   int full_liters;
+  int rssi;
   SENSOR_ERROR_t error;
 } remoteSensor_t;
 
 extern int calculate_liters(int measurement);
+extern remoteSensor_t sensor_1;
+extern remoteSensor_t sensor_2;
