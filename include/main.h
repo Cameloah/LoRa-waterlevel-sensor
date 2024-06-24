@@ -1,11 +1,14 @@
 #pragma once
 #include <Arduino.h>
-#include "lora_config.h"
 #include "LoRa_E220.h"
 
-#include "pin_config.h"
 #include "display_tft.h"
+#include "lora_config.h"
+#include "data_logger.h"
 
+
+
+// ---------------------- APP ---------------------- //
 
 #define TANK_DIAMETER_CM                                  220 // in cm
 #define TANK_LVL_EMPTY_CM                                 270 // in cm
@@ -36,6 +39,7 @@ typedef enum{
 typedef struct {
   int tank_id;
   int tank_measurement;
+  uint32_t timestamp;
   int battery_voltage;
 } tankData_t;
 

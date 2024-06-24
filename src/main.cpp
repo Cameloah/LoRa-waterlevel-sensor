@@ -55,7 +55,7 @@ void warning_low_batt();
 // ---------------------- SETUP ---------------------- //
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   Serial.println("Startup, waiting for data...");
 
   pinMode(GPIO_NUM_14, INPUT);
@@ -64,6 +64,8 @@ void setup() {
   e220ttl.setMode(MODE_1_WOR_TRANSMITTER);
 
   display_init();
+
+  data_logger_init();
 
   // --------- initialize data buffers --------- //
   memset(&sensor_1, 0x00, sizeof(sensor_1));
@@ -217,6 +219,8 @@ void request_sensor_data(remoteSensor_t &sensor) {
 
   sensor.volume_liters = calculate_liters(sensor.data.tank_measurement);
   sensor.volume_percent = sensor.volume_liters * 100 / sensor.full_liters;
+
+  data_logger_save(sensor.data.tank_id, sensor.volume_percent, sensor.data.timestamp);
 }
 
 void print_error(remoteSensor_t &sensor) {
