@@ -33,7 +33,7 @@ lcd_cmd_t lcd_st7789v[] = {
 
 
 
-
+void display_plot(int tank_id, int days_range, int x_start, int y_start);
 
 int _wrapText(String& text, int width) {
     int textLength = text.length();
@@ -325,7 +325,6 @@ void display_error(uint8_t *sensor_buffer) {
 void display_advanced_data(uint8_t* sensor_buffer) {
     remoteSensor_t sensor = *(remoteSensor_t *) sensor_buffer;
     String msg = "Tank " + String(sensor.sensor_id) + "\n" +
-                 "Sensor ID: " + String(sensor.data.tank_id) + "\n" +
                  "Sensormessung: " + String(sensor.data.tank_measurement) + " cm\n" +
                  "Batteriespannung: " + String(sensor.data.battery_voltage/1000.) + "V\n" +
                  "Empfangsstaerke: " + String(map(sensor.rssi, 0, 255, 0, 100)) + "%";
@@ -340,13 +339,136 @@ void display_advanced_page() {
     sprite_total.fillSprite(BG_COLOR);
     // set text properties
 
-    display_advanced_data((uint8_t*) &sensor_1);
+    display_advanced_data((uint8_t*) &sensor_1);    
     display_advanced_data((uint8_t*) &sensor_2);
 }
 
+void display_plot1d_page() {
+    sprite_total.fillSprite(BG_COLOR);
+    display_plot(1, 1, 5, 15);
+    display_plot(2, 1, 5, 175);
+}
+
+void display_plot1w_page() {
+    sprite_total.fillSprite(BG_COLOR);
+    display_plot(1, 7, 5, 15);
+    display_plot(2, 7, 5, 175);
+}
+
+void display_plot1m_page() {
+    sprite_total.fillSprite(BG_COLOR);
+    display_plot(1, 30, 5, 15);
+    display_plot(2, 30, 5, 175);
+}
+
+void display_plot3m_page() {
+    sprite_total.fillSprite(BG_COLOR);
+    display_plot(1, 90, 5, 15);
+    display_plot(2, 90, 5, 175);
+}
+
+void display_plot(int tank_id, int days_range, int x_start, int y_start) {
+    prepare_plot_data(tank_id, days_range);
+
+    uint8_t* plot_data = (tank_id == 1) ? plot_data_1 : plot_data_2;
+
+    if (days_range >= 30)
+        days_range = days_range / 30 * 30;
+
+    else if (days_range >= 7)
+        days_range = days_range / 7 * 7;
+
+    int plot_height = 100;
+
+    sprite_total.setTextSize(1);
+    sprite_total.setTextFont(2);
+    sprite_total.setTextColor(TFT_WHITE);
+
+    sprite_total.setCursor(x_start + DATALOG_PLOT_MAX_ITEMS / 2 - sprite_total.textWidth("Tank 1") / 2, y_start);
+    sprite_total.println("Tank " + String(tank_id));
+
+    y_start += 20;
+
+    if (days_range == 1) {
+        sprite_total.drawFastVLine(x_start + DATALOG_PLOT_MAX_ITEMS / 2, y_start, plot_height, TFT_DARKGREY);
+        
+        sprite_total.setCursor(x_start, y_start + plot_height + 5);
+        sprite_total.println("24h");
+        sprite_total.setCursor(x_start + DATALOG_PLOT_MAX_ITEMS / 2 - sprite_total.textWidth("12h") / 2, y_start + plot_height + 5);
+        sprite_total.println("12h");
+    }
+
+    else if (days_range < 7) {
+        for (int i = 0; i < 7; i++) {
+            sprite_total.drawFastVLine(x_start + i * DATALOG_PLOT_MAX_ITEMS / days_range, y_start, plot_height, TFT_DARKGREY);
+        }
+        sprite_total.setCursor(x_start, y_start + plot_height + 5);
+        sprite_total.println(String(days_range) + " Tage");
+    }
+
+    else if (days_range == 7) {
+        for (int i = 1; i < 7; i++) {
+            sprite_total.drawFastVLine(x_start + i * DATALOG_PLOT_MAX_ITEMS / days_range, y_start, plot_height, TFT_DARKGREY);
+        }
+        sprite_total.setCursor(x_start, y_start + plot_height + 5);
+        sprite_total.println("1 Woche");
+    }
+
+    else if (days_range < 30) {
+        int weeks = days_range / 7;
+        for (int i = 1; i <= weeks; i++) {
+            int x_pos = x_start + DATALOG_PLOT_MAX_ITEMS - i * (7 * DATALOG_PLOT_MAX_ITEMS / days_range);
+            sprite_total.drawFastVLine(x_pos, y_start, plot_height, TFT_DARKGREY);
+        }
+        sprite_total.setCursor(x_start, y_start + plot_height + 5);
+        sprite_total.println(String(weeks) + " Wochen");
+    }
+
+    else if (days_range == 30) {
+        for (int i = 1; i <= 4; i++) {
+            int x_pos = x_start + DATALOG_PLOT_MAX_ITEMS - i * (7 * DATALOG_PLOT_MAX_ITEMS / days_range);
+            sprite_total.drawFastVLine(x_pos, y_start, plot_height, TFT_DARKGREY);
+        }
+        sprite_total.setCursor(x_start, y_start + plot_height + 5);
+        sprite_total.println("1 Monat");
+    }
+
+    else {
+        int months = days_range / 30;
+        for (int i = 1; i <= months; i++) {
+            int x_pos = x_start + DATALOG_PLOT_MAX_ITEMS - i * (30 * DATALOG_PLOT_MAX_ITEMS / days_range);
+            sprite_total.drawFastVLine(x_pos, y_start, plot_height, TFT_DARKGREY);
+        }
+        sprite_total.setCursor(x_start, y_start + plot_height + 5);
+        sprite_total.println(String(months) + " Monate");
+    }
+
+    sprite_total.drawFastHLine(x_start, y_start + plot_height - map(25, 0, 100, 0, plot_height), DATALOG_PLOT_MAX_ITEMS + 4, TFT_DARKGREY);
+    sprite_total.drawFastHLine(x_start, y_start + plot_height - map(50, 0, 100, 0, plot_height), DATALOG_PLOT_MAX_ITEMS + 4, TFT_DARKGREY);
+    sprite_total.drawFastHLine(x_start, y_start + plot_height - map(75, 0, 100, 0, plot_height), DATALOG_PLOT_MAX_ITEMS + 4, TFT_DARKGREY);
+
+    
+
+    sprite_total.drawRect(x_start, y_start, DATALOG_PLOT_MAX_ITEMS, plot_height, TFT_WHITE);
+    
+    sprite_total.setCursor(x_start + DATALOG_PLOT_MAX_ITEMS - sprite_total.textWidth("0") / 2, y_start + plot_height + 5);
+    sprite_total.println("0");
+    sprite_total.setCursor(x_start + DATALOG_PLOT_MAX_ITEMS + 5, y_start + plot_height / 2 - sprite_total.fontHeight() / 2);
+    sprite_total.println("%");
 
 
+    int y_prev = 0;
 
+    for (int i = 0; i < DATALOG_PLOT_MAX_ITEMS; i++) {
+        int x = x_start + i;
+        int y = y_start + plot_height - map(plot_data[DATALOG_PLOT_MAX_ITEMS - 1 - i], 0, 100, 0, plot_height);
+        
+        if (i > 0)
+            sprite_total.drawLine(x - 1, y_prev, x, y, TFT_YELLOW);
+        y_prev = y;
+    }
+   
+}
 
 
 // ---------------------- TFT PIN CHECK ---------------------- //

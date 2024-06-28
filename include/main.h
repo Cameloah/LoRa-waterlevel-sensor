@@ -16,7 +16,7 @@
 #define TANK_LITERS_RESERVE                               500 // in liters
 
 #define MEASUREMENT_INTERVAL                              300000 // in milliseconds --- 5 min
-#define RESPONSE_TIMEOUT                                  2000 + 3000 // 2s need for wakeup, + timout in milliseconds
+#define RESPONSE_TIMEOUT                                  2000 + 5000 // 2s need for wakeup, + timout in milliseconds
 
 #define BATTERY_LOW_VOLTAGE                               3600 // in mV 
 
@@ -39,7 +39,7 @@ typedef enum{
 typedef struct {
   int tank_id;
   int tank_measurement;
-  uint32_t timestamp;
+  unsigned long int timestamp;
   int battery_voltage;
 } tankData_t;
 

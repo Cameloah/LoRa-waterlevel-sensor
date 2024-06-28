@@ -105,19 +105,20 @@ void loop() {
     unsigned long pressTime = millis();
     while (digitalRead(GPIO_NUM_14) == LOW) {
       if (millis() - pressTime > 1000) {
-        // state machine trigger, switch to advanced display
-        page_index = !page_index;
-        timestamp_advanced_page = millis();
+        display_msg_box(SPRITE_WIDTH / 2, SPRITE_HEIGHT / 2, SPRITE_WIDTH - 5, "Frage Sensordaten ab...", true, TFT_BLACK);
+        display_update();
+        request_sensor_data(sensor_1);
+        request_sensor_data(sensor_2);
         button_pressed = true;
         return;
       }
       delay(10);
     }
 
-    display_msg_box(SPRITE_WIDTH / 2, SPRITE_HEIGHT / 2, SPRITE_WIDTH - 5, "Frage Sensordaten ab...", true, TFT_BLACK);
-    display_update();
-    request_sensor_data(sensor_1);
-    request_sensor_data(sensor_2);
+    // state machine trigger, switch to advanced display
+    page_index++;
+    timestamp_advanced_page = millis();
+    button_pressed = true;    
   }
 
   if(digitalRead(GPIO_NUM_14) == HIGH)
@@ -129,11 +130,7 @@ void loop() {
 
   switch (page_index)
   {
-  case 1:
-    display_advanced_page();
-    break;
-
-  default:
+  case 0:
     display_levels((uint8_t*) &sensor_1, (uint8_t*) &sensor_2);
     warning_full();
 
@@ -142,6 +139,30 @@ void loop() {
 
     display_error((uint8_t*) &sensor_1);
     display_error((uint8_t*) &sensor_2);
+    break;
+
+  case 1:
+    display_advanced_page();
+    break;
+
+  case 2:
+    display_plot1d_page();
+    break;
+
+  case 3:
+    display_plot1w_page();
+    break;
+
+  case 4:
+    display_plot1m_page();
+    break;
+
+  case 5:
+    display_plot3m_page();
+    break;
+
+  default:
+    page_index = 0;
   }
   
   display_update();
@@ -220,7 +241,8 @@ void request_sensor_data(remoteSensor_t &sensor) {
   sensor.volume_liters = calculate_liters(sensor.data.tank_measurement);
   sensor.volume_percent = sensor.volume_liters * 100 / sensor.full_liters;
 
-  data_logger_save(sensor.data.tank_id, sensor.volume_percent, sensor.data.timestamp);
+  data_logger_save(sensor.sensor_id, sensor.volume_percent, sensor.data.timestamp);
+  Serial.println("Tank " + String(sensor.sensor_id) + " Data: " + String(sensor.volume_liters) + "L, " + String(sensor.volume_percent) + "%, " + String(sensor.data.battery_voltage) + "mV");
 }
 
 void print_error(remoteSensor_t &sensor) {

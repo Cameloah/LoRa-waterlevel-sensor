@@ -2,6 +2,7 @@
 #include "TFT_eSPI.h" /* Please use the TFT library provided in the library. */
 #include "pin_config.h"
 #include "main.h"
+#include "data_logger.h"
 
 /* The product now has two screens, and the initialization code needs a small change in the new version. The LCD_MODULE_CMD_1 is used to define the
  * switch macro. */
@@ -39,3 +40,7 @@ void display_levels(uint8_t *sensor_buffer1, uint8_t *sensor_buffer2);
 void display_error(uint8_t *sensor_buffer);
 void display_msg_box(int center_x, int center_y, int width, String msg, bool center, uint16_t color);
 void display_advanced_page();
+void display_plot1d_page();
+void display_plot1w_page();
+void display_plot1m_page();
+void display_plot3m_page();
