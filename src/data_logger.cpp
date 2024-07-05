@@ -88,12 +88,14 @@ void prepare_plot_data(int tank_id, int days_range) {
     int plot_index = 1;
     dataStamp_t latest_timestamp = logstamp_tank[data_index];
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < DATALOG_MAX_ITEMS; i++) {
 
         int index = data_index - i;
         if (index < 0) {
             index += DATALOG_MAX_ITEMS;
         }
+
+        // Serial.println("index: " + String(index) + ", Stamp: " + String(logstamp_tank[index]) + ", data: " + String(logdata_tank[index]));
 
         if (logstamp_tank[index] == 0)
             continue;
@@ -107,6 +109,6 @@ void prepare_plot_data(int tank_id, int days_range) {
             plot_data[plot_index] = logdata_tank[index];
             plot_index += increments;
             latest_timestamp = logstamp_tank[index];
-        }        
+        }      
     }
 }
