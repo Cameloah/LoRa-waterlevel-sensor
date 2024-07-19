@@ -1,8 +1,15 @@
 #include "measure.h"
 
 
+
+// -------------------- VL53L5CX sensor -------------------- //
+
 SparkFun_VL53L5CX myImager;
 VL53L5CX_ResultsData measurementData; // Result data class structure, 1356 byes of RAM
+
+
+
+// ------------------- image processing ------------------- //
 
 int kernel_edge[3][3] = {
     {0, -1, 0},
@@ -32,30 +39,34 @@ int sensor_data[8][8] = {0};
 int processed_data[8][8] = {0};
 
 
-int get_fill_status() {
-    Wire.begin();
-    Wire.setClock(1000000); //Sensor has max I2C freq of 1MHz
-    
 
-    Serial.println("Initializing sensor board...");
+// ------------------- functions ------------------- //
+
+int get_fill_status() {
+
+    // setup communication and initialize sensor. Sensor has max I2C freq of 1MHz
+    Wire.begin();
+    Wire.setClock(1000000);
+    
     if (!myImager.begin()) {
         Serial.println(F("Sensor not found - check your wiring. Freezing"));
         return -1;
     }
     
-    myImager.setResolution(8*8); //Enable all 64 pads
+    myImager.setResolution(8*8);                                    //Enable all 64 pads
     int imageResolution = myImager.getResolution();
     int imageWidth = sqrt(imageResolution);
-    myImager.startRanging();
 
+
+
+    // take measurement and go to sleep afterwards
+    myImager.startRanging();
     int num_measurements = 0;
 
     while(num_measurements < NUM_MEASUREMENTS) {
-        if (myImager.isDataReady() == true)
-        {
+        if (myImager.isDataReady() == true) {
             if (myImager.getRangingData(&measurementData)) {
-                for (int i = 0 ; i < imageResolution; i++)
-                {
+                for (int i = 0 ; i < imageResolution; i++) {
                     int result = measurementData.distance_mm[i];
                     sensor_data[i / imageWidth][i % imageWidth] = result;
                 }
@@ -63,7 +74,6 @@ int get_fill_status() {
                 num_measurements++;
             }
         }
-
         delay(5);
     }
 
@@ -72,22 +82,9 @@ int get_fill_status() {
     if(!myImager.setPowerMode(SF_VL53L5CX_POWER_MODE::SLEEP))
 		Serial.print("vl53l5cx_set_power_mode failed\n");
 
-    // Check if device is actually in sleep mode
-    SF_VL53L5CX_POWER_MODE currentPowerMode = myImager.getPowerMode();
-    switch (currentPowerMode)
-    {
-        case SF_VL53L5CX_POWER_MODE::SLEEP:
-            Serial.println(F("Sensor is sleeping."));
-            break;
 
-        case SF_VL53L5CX_POWER_MODE::WAKEUP:
-            Serial.println(F("Device is awake."));
-            break;
 
-        default:
-            Serial.println(F("Cannot retrieve device power mode."));
-    }
-
+    // prepare sensor_data for image processing
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             processed_data[i][j] = sensor_data[i][j];
@@ -99,10 +96,11 @@ int get_fill_status() {
 
 
 
-    int min_value = INT_MAX;
-    int max_value = 0;
 
     // Find minimum and maximum values in processed_data
+    int min_value = INT_MAX;
+    int max_value = 0;
+    
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             if (processed_data[i][j] == 0)
@@ -181,6 +179,7 @@ int get_fill_status() {
 
 
 
+    // Perform edge detection on padded_data
     _convolution(padded_data, kernel_edge, 10, 10, 3, 3);
 
     Serial.println("\n After egde detection: ");
@@ -194,7 +193,7 @@ int get_fill_status() {
 
 
 
-    // crop and copy the result of convolution back to processed_data and threshold it
+    // crop back to sensor data size and copy the result of convolution back to processed_data. threshold it
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             processed_data[i][j] = padded_data[i + 1][j + 1] < 1 ? 0 : 1;
@@ -212,31 +211,34 @@ int get_fill_status() {
 
 
 
+    // Perform pattern matching on processed_data. returns the intersection coordinates and best angle
     int intersection[2] = {0, 0};
     int best_angle = 0;
     _patternMatching(processed_data, 8, 8, 15, 15, intersection, &best_angle);
 
     Serial.print("Intersection: "); Serial.print(intersection[0]); Serial.print(", "); Serial.println(intersection[1]);
 
-    int x_1 = int(cos(radians(best_angle + 90)) * 4);
-    int y_1 = int(sin(radians(best_angle + 90)) * 4);
+    int x_1 = int(cos(radians(best_angle + 180)) * 4);
+    int y_1 = int(sin(radians(best_angle + 180)) * 4);
 
-    int x_2 = int(cos(radians(best_angle - 45)) * 4);
-    int y_2 = int(sin(radians(best_angle - 45)) * 4);
+    int x_2 = int(cos(radians(best_angle + 45)) * 4);
+    int y_2 = int(sin(radians(best_angle + 45)) * 4);
 
-    int x_3 = int(cos(radians(best_angle - 135)) * 4);
-    int y_3 = int(sin(radians(best_angle - 135)) * 4);
+    int x_3 = int(cos(radians(best_angle - 45)) * 4);
+    int y_3 = int(sin(radians(best_angle - 45)) * 4);
 
-    Serial.print("x_1: "); Serial.println(x_1); Serial.print("y_1: "); Serial.println(y_1);
-    Serial.print("x_2: "); Serial.println(x_2); Serial.print("y_2: "); Serial.println(y_2);
-    Serial.print("x_3: "); Serial.println(x_3); Serial.print("y_3: "); Serial.println(y_3);
+    Serial.print("x_1: "); Serial.print(x_1); Serial.print(", y_1: "); Serial.println(y_1);
+    Serial.print("x_2: "); Serial.print(x_2); Serial.print(", y_2: "); Serial.println(y_2);
+    Serial.print("x_3: "); Serial.print(x_3); Serial.print(", y_3: "); Serial.println(y_3);
 
 
     int measure_at[3][2] = {
-        {intersection[0] - y_1, intersection[1] + x_1},
-        {intersection[0] - y_2, intersection[1] + x_2},
-        {intersection[0] - y_3, intersection[1] + x_3}
+        {intersection[0] + x_1, intersection[1] + y_1},
+        {intersection[0] + x_2, intersection[1] + y_2},
+        {intersection[0] + x_3, intersection[1] + y_3}
     };
+
+
 
     // Adjust coordinates if they are outside the size of sensor_data
     for (int i = 0; i < 3; i++) {
