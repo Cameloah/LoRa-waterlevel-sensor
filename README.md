@@ -58,9 +58,10 @@ Device | Normal operation | Sleep
 ## Code
 
 The code mainly does the following things:
-1. wake up by WORA signal using the E220 LoRa module
+1. wake up by WOR signal using the E220 LoRa module
 2. perform a measurement
 3. transmit a package containing the measurement, sensor id, timestamp and battery level
+4. go back to sleep
 
 Sensing unit 1 features a simple ultrasonic sensor to measure the disance from the top of the reservoir to the fluid level.
 
