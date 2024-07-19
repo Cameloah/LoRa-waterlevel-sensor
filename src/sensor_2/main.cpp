@@ -1,6 +1,7 @@
 #include "Arduino.h"
 #include "LoRa_E220.h"
 #include "lora_config.h"
+#include "measure.h"
 
 #include "soc/rtc_cntl_reg.h"
 #include "soc/rtc.h"
@@ -53,17 +54,6 @@ LoRa_E220 e220ttl(
 
 
 
-// --------------------------------- AJSR04M --------------------------------- //
-
-#define SENSOR_RANGE_MIN                                  20	
-#define SENSOR_RANGE_MAX                                  450
-#define SENSOR_TIMEOUT                                    3
-
-#define PIN_AJSR04M_ECHO                                  26
-#define PIN_AJSR04M_TRIG                                  25
-
-
-
 // --------------------------------- APP DATA --------------------------------- //
 
 struct tankData {
@@ -80,13 +70,8 @@ int _measure_distance();
 
 
 void setup() {
-  // ------------- pin configuration ---------------- //
-  pinMode(PIN_AJSR04M_TRIG, OUTPUT);
-  pinMode(PIN_AJSR04M_ECHO, INPUT);
-  
-
   // --------------- system setup ------------------- //
-  Serial.begin(9600);
+  Serial.begin(115200);
   memset(&currentTankData, 0x00, sizeof(currentTankData));
 
   unsigned long now = time(NULL);
@@ -103,7 +88,7 @@ void setup() {
   e220ttl.setMode(MODE_0_NORMAL);
 
   currentTankData.tank_id = TANK_ID;
-  currentTankData.tank_level = _measure_distance();
+  currentTankData.tank_level = get_fill_status();
   ResponseStatus rs = e220ttl.sendFixedMessage(0, DESTINATION_ADDL, 18, &currentTankData, sizeof(currentTankData));
 
   // ------------- go to sleep ---------------------- //
@@ -114,50 +99,10 @@ void setup() {
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
   gpio_deep_sleep_hold_en();
 
+
   esp_deep_sleep_start();
   delay(100);
   Serial.println("If you see this, the mcu is not sleeping!");
 }
  
 void loop() {}
-
-
-
-
-
-int _measure_distance(){
-  int duration = 0;
-  int distance = 0;
-  int retries = 0;
-
-  // Clears the trigPin condition
-  digitalWrite(PIN_AJSR04M_TRIG, LOW);
-  delayMicroseconds(2);
-
-  while((distance < SENSOR_RANGE_MIN || distance > SENSOR_RANGE_MAX) &&
-        retries <= SENSOR_TIMEOUT) {
-  
-    // Sets the trigPin HIGH (ACTIVE) for 1000 microseconds to wake module
-    digitalWrite(PIN_AJSR04M_TRIG, HIGH);
-    delayMicroseconds(1000);
-    digitalWrite(PIN_AJSR04M_TRIG, LOW);
-
-    duration = pulseIn(PIN_AJSR04M_ECHO, HIGH);
-    distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (there and back)
-
-    Serial.print("Distance: ");
-    Serial.print(distance);
-    Serial.println(" cm");
-
-    if (distance < SENSOR_RANGE_MIN || distance > SENSOR_RANGE_MAX) {
-      Serial.println("Distance out of range.");
-      distance = -1;
-      if (retries < SENSOR_TIMEOUT) {
-        delay(50);
-      } 
-    }
-    ++retries;
-  }
-
-  return distance;
-}
