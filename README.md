@@ -86,13 +86,27 @@ Next an edge map was created using convolution with an edge kernel, after which 
 Using diameter and size of the reservoir, the volume of the containing fluid could be computed and send to the receiver.
 
 
-# fluidlevel-receiver
-Lilygo t-display s3 based monitor using LoRa to display fluid level of a waste tank
+# Reveiver
+The receiver is an ESP32 based display module, showing the fill status of both reservoirs.
+It features:
+- color display
+- fill status warning
+- sensor error handling
+- data logging, showing plots for different time frames
 
 ## Electronics
 
 BOM:
 - Lilygo t-display ESP32-S3 board containing a color tft display
 - ebyte LoRa E220 TTL Module
+
+
+
+
+![IMG_20240624_133929](https://github.com/user-attachments/assets/b66dd109-3e1a-4b50-abd6-e5defa47f302)
+
+![IMG_20240705_124411](https://github.com/user-attachments/assets/c7c64790-ad77-4b71-bcc3-45e320926d03)  |  ![IMG_20240705_124420](https://github.com/user-attachments/assets/6230383a-c9d5-47c9-a6ea-e3f7e94d7866)
+:-------------------------:|:-------------------------:
+
 
 
