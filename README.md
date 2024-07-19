@@ -79,7 +79,7 @@ In a first step, the data from the LV53L5CX sensor was normalized and thresholde
 
 ![image](https://github.com/user-attachments/assets/2b418a5c-5e7d-484b-9c45-8fd1bae13564)
 
-Next an edge map was created using convolution with an edge kernel, after which the pattern could be tested on the image, again using convolution and find its best position (red marker) and orientation. From there the 3 measureing coordinates (blue markers) could be computed using simple trigonometry.
+Next an edge map was created using convolution with an edge kernel, after which the pattern could be tested on the image, again using convolution and find its best position (blue marker) and orientation. From there the 3 measureing coordinates (red markers) could be computed using simple trigonometry.
 
 ![image](https://github.com/user-attachments/assets/51a12063-0d33-4756-92e0-5d182701ab70)
 
