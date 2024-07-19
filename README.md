@@ -2,7 +2,7 @@
 
 
 
-**A set of three meshed devices, namely two sensisng units and a display unit, to monitor the fluid level in two remotely located reservoirs.**
+**A set of three meshed devices, namely two sensing units and a display unit, to monitor the fluid level in two remotely located reservoirs.**
 
 
 Due to the remote location and other constraints, the sensing units have the following features
