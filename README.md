@@ -87,7 +87,7 @@ Next an edge map was created using convolution with an edge kernel, after which 
 Using diameter and size of the reservoir, the volume of the containing fluid could be computed and send to the receiver.
 
 
-# Reveiver
+# Receiver
 The receiver is an ESP32 based display module, showing the fill status of both reservoirs.
 It features:
 - color display
