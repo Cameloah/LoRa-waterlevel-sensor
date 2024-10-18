@@ -6,7 +6,7 @@
 
 
 Due to the remote location and other constraints, the sensing units have the following features
-1. Battery-powered, lasting 6 month on a single charge
+1. Battery-powered, lasting at least 6 month on a single charge
 2. fully waterproof enclosure to be protected from rainwater and condensation
 3. wireless transfer of data using Long Range 868 MHz frequency
 4. remote wakeup call to configure polling rate on demand
@@ -43,6 +43,8 @@ Device | Normal operation | Sleep
  AJ-SR04M | 30 mA | 40 uA
  LoRa E220 | 50 mA | 2 uA
  Active time | 1s | 15 min
+
+ Of course the battery life depends on the polling rate. With a wakeup call every 15 minutes, the battery life is expected to be ~9 month. Using the WOR (wake on receive) functionality of the E220 TTL module, the polling rate can be configured by the display unit. This allows for further adjustments after deployment.
 
 ![IMG_20240624_133554](https://github.com/user-attachments/assets/0165ff7d-f08b-4859-8541-e6013c86e1cc)  |  ![IMG_20240621_184606](https://github.com/user-attachments/assets/61593344-f5bc-4aee-9b0e-5e6af38d56cd)
 :-------------------------:|:-------------------------:
