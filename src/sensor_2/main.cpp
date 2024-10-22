@@ -37,9 +37,9 @@ int _readBattery() {
 
 
 // --------------------------------- LoRa E220 TTL --------------------------------- //
-#define PIN_E220_AUX                                      GPIO_NUM_4
-#define PIN_E220_M0                                       GPIO_NUM_13
-#define PIN_E220_M1                                       GPIO_NUM_12
+#define PIN_E220_AUX                                      GPIO_NUM_4   //D12
+#define PIN_E220_M0                                       GPIO_NUM_13  //D7   currently not connected
+#define PIN_E220_M1                                       GPIO_NUM_12  //D13
 
 #define DESTINATION_ADDL                                  2
 
@@ -79,6 +79,7 @@ void setup() {
 
   // ------------- battery level -------------------- //
   currentTankData.battery_voltage = _readBattery();
+  Serial.println("Battery level: " + String(currentTankData.battery_voltage) + " mV");
 
 
   // ------------ lora send measurement -------------- //
