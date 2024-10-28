@@ -24,14 +24,14 @@ pattern = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 # generate fake data
 testing_data = np.zeros((18, 18))
 
-distance_sensor_obstacle = 80
-compartment_1_level = 80#random.randint(50, 220)
-compartment_2_level = 80#random.randint(90, 220)
-compartment_3_level = random.randint(90, 220)
+distance_sensor_obstacle = 60
+compartment_1_level = random.randint(50, 220)
+compartment_2_level = random.randint(50, 220)
+compartment_3_level = random.randint(50, 220)
 
-compartment_1_level = max(compartment_1_level, 80)
-compartment_2_level = max(compartment_2_level, 80)
-compartment_3_level = max(compartment_3_level, 80)
+compartment_1_level = max(compartment_1_level, 60)
+compartment_2_level = max(compartment_2_level, 60)
+compartment_3_level = max(compartment_3_level, 60)
 
 
 for i in range(testing_data.shape[0]):
@@ -97,18 +97,22 @@ kernel_sharpen = np.array([[ 0, -1,  0],
                         [-1,  5, -1],
                         [ 0, -1,  0]])
 
+kernel_box_blur = np.array([[1, 1, 1],
+                            [1, 8, 1],
+                            [1, 1, 1]])
+
 
 def convolution(edgedetection_input, kernel):
     output = np.zeros_like(edgedetection_input)
     for i in range(edgedetection_input.shape[0]):
         for j in range(edgedetection_input.shape[1]):
             convolute_result = 0
-            for m in range(kernel_ridge.shape[0]):
-                for n in range(kernel_ridge.shape[1]):
-                    convolute_index_k = i - kernel_ridge.shape[0] // 2 + m
-                    convolute_index_l = j - kernel_ridge.shape[1] // 2 + n
+            for m in range(kernel.shape[0]):
+                for n in range(kernel.shape[1]):
+                    convolute_index_k = i - kernel.shape[0] // 2 + m
+                    convolute_index_l = j - kernel.shape[1] // 2 + n
                     if convolute_index_k >= 0 and convolute_index_k < edgedetection_input.shape[0] and convolute_index_l >= 0 and convolute_index_l < edgedetection_input.shape[1]:
-                        convolute_result += edgedetection_input[convolute_index_k, convolute_index_l] * kernel_ridge[m, n]
+                        convolute_result += edgedetection_input[convolute_index_k, convolute_index_l] * kernel[m, n]
             output[i, j] = convolute_result
     return output
 
@@ -138,13 +142,23 @@ normalized_data = np.pad(normalized_data, ((1, 1), (1, 1)), mode='edge')
 
 print(normalized_data.shape)
 
-edge_map = convolution(normalized_data, kernel_edge)
+# Print normalized_data in a human-readable matrix style
+for row in normalized_data:
+    print(" ".join(f"{val:.2f}" for val in row))
+
+edge_map = convolution(normalized_data, kernel_ridge)
 edge_map = edge_map[1:-1, 1:-1]
+
+edge_matrix = np.copy(edge_map)
+
+edge_map = convolution(edge_map, kernel_box_blur)
+
+
 print(edge_map.shape)
 
-edge_map[edge_map < 0.5] = 0
-edge_map[edge_map > 0.5] = 1
 
+edge_map[edge_map < 1] = 0
+edge_map[edge_map >= 1] = 1
 
 
 # Apply each Sobel kernel to the matrix and sum the results
@@ -229,21 +243,26 @@ def plot_matrix(ax, matrix, title, coord_intersection=None, measure_at=None):
     ax.set_title(title)
     return cax
 
+
 # Create subplots
-fig, axs = plt.subplots(1, 3, figsize=(12, 6))
+fig, axs = plt.subplots(1, 4, figsize=(18, 6))
+manager = plt.get_current_fig_manager()
+manager.window.wm_geometry("+0+0")
 
 # Plot best_kernel without coord_intersection and measure_at
-cax1 = plot_matrix(axs[0], best_kernel, "Best Kernel")
+cax1 = plot_matrix(axs[0], normalized_data, "normalized data")
 
 # Plot sensor_data with coord_intersection and measure_at
 cax2 = plot_matrix(axs[1], sensor_data, "Sensor Data", coord_intersection, measure_at)
 cax3 = plot_matrix(axs[2], edge_map, "edge_map")
+cax4 = plot_matrix(axs[3], edge_matrix, "Edge Matrix")
 
 
 # Add colorbars
 fig.colorbar(cax1, ax=axs[0])
 fig.colorbar(cax2, ax=axs[1])
 fig.colorbar(cax3, ax=axs[2])
+fig.colorbar(cax4, ax=axs[3])
 
 # Show the plot
 plt.tight_layout()

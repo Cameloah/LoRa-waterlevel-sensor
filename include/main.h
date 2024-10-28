@@ -15,8 +15,8 @@
 #define TANK_LVL_FULL_CM                                  30 // in cm
 #define TANK_LITERS_RESERVE                               500 // in liters
 
-#define MEASUREMENT_INTERVAL                              900000 // in milliseconds --- 5 min
-#define RESPONSE_TIMEOUT                                  2000 + 5000 // 2s need for wakeup, + timout in milliseconds
+#define MEASUREMENT_INTERVAL                              900000 // in milliseconds --- 15 min
+#define RESPONSE_TIMEOUT                                  2000 + 10000 // 2s need for wakeup, + timout in milliseconds
 
 #define BATTERY_LOW_VOLTAGE                               3600 // in mV 
 
