@@ -1,6 +1,9 @@
 #include "measure.h"
+#include <vector>
 
 
+
+#define TANK_LVL_EMPTY_CM                                 270 // in cm
 
 // -------------------- VL53L5CX sensor -------------------- //
 
@@ -15,6 +18,18 @@ int kernel_edge[3][3] = {
     {0, -1, 0},
     {-1, 4, -1},
     {0, -1, 0}
+};
+
+int kernel_ridge[3][3] = {
+    {-1, -1, -1},
+    {-1, 8, -1},
+    {-1, -1, -1}
+};
+
+int kernel_blur[3][3] = {
+    {1, 1, 1},
+    {1, 8, 1},
+    {1, 1, 1}
 };
 
 int pattern[15][15] = {
@@ -37,10 +52,38 @@ int pattern[15][15] = {
 
 int sensor_data[8][8] = {0};
 int processed_data[8][8] = {0};
+int signal_strength[8][8] = {0};
+int sensor_status[8][8] = {0};
 
 
 
 // ------------------- functions ------------------- //
+int calculate_median(int measurements[], int size) {
+        std::vector<int> valid_measurements;
+        for (int i = 0; i < size; i++) {
+            if (measurements[i] != 0) {
+                valid_measurements.push_back(measurements[i]);
+            }
+        }
+
+        std::sort(valid_measurements.begin(), valid_measurements.end());
+
+        int median = 0;
+        if (!valid_measurements.empty()) {
+            int mid = valid_measurements.size() / 2;
+            if (valid_measurements.size() % 2 == 0) {
+                median = (valid_measurements[mid - 1] + valid_measurements[mid]) / 2;
+            } else {
+                median = valid_measurements[mid];
+            }
+        }
+
+        else
+            return TANK_LVL_EMPTY_CM * 10;
+
+        return median;
+    }
+
 
 int get_fill_status() {
 
@@ -49,7 +92,7 @@ int get_fill_status() {
     Wire.setClock(1000000);
     
     if (!myImager.begin()) {
-        Serial.println(F("Sensor not found - check your wiring. Freezing"));
+        Serial.println(F("Sensor not found - check your wiring. Aborting..."));
         return -1;
     }
     
@@ -58,6 +101,31 @@ int get_fill_status() {
     int imageWidth = sqrt(imageResolution);
 
 
+    // Set the ranging mode
+    if (!myImager.setRangingMode(SF_VL53L5CX_RANGING_MODE::AUTONOMOUS))
+    {
+        Serial.println(F("Cannot set ranging mode requested. Aborting..."));
+        return -1;
+    }
+
+
+    // Set the ranging frequency
+    if (!myImager.setRangingFrequency(1))
+    {
+        Serial.println(F("Cannot set ranging frequency requested. Aborting..."));
+        return -1;
+    }
+
+
+    // set integration time
+    if (myImager.setIntegrationTime(1000))
+        Serial.println("Current integration time: " + String(myImager.getIntegrationTime()) + "ms");
+    else {
+        Serial.println(F("Cannot set integration time. Aborting..."));
+        return -1;
+    }
+
+    Serial.println("start ranging...");
 
     // take measurement and go to sleep afterwards
     myImager.startRanging();
@@ -69,6 +137,8 @@ int get_fill_status() {
                 for (int i = 0 ; i < imageResolution; i++) {
                     int result = measurementData.distance_mm[i];
                     sensor_data[i / imageWidth][i % imageWidth] = result;
+                    signal_strength[i / imageWidth][i % imageWidth] = measurementData.signal_per_spad[i];
+                    sensor_status[i / imageWidth][i % imageWidth] = measurementData.target_status[i];
                 }
 
                 num_measurements++;
@@ -79,23 +149,45 @@ int get_fill_status() {
 
     myImager.stopRanging();
 
+    Serial.println("finished measurement.");
+
     if(!myImager.setPowerMode(SF_VL53L5CX_POWER_MODE::SLEEP))
 		Serial.print("vl53l5cx_set_power_mode failed\n");
 
-
+    Serial.println("\n Sensor data:");
 
     // prepare sensor_data for image processing
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
-            processed_data[i][j] = sensor_data[i][j];
+            if (sensor_status[i][j] == 5 || sensor_status[i][j] == 6 || sensor_status[i][j] == 9)
+                processed_data[i][j] = sensor_data[i][j];
+            else
+                processed_data[i][j] = TANK_LVL_EMPTY_CM * 10;
             Serial.print("\t");
-            Serial.print(processed_data[i][j]);
+            Serial.print(sensor_data[i][j]);
         }
         Serial.println();
     }
 
+    // print signal strength
+    Serial.println("\n Signal strength: ");
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            Serial.print("\t");
+            Serial.print(signal_strength[i][j]);
+        }
+        Serial.println();
+    }
 
-
+    // print sensor status
+    Serial.println("\n Sensor status: ");
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            Serial.print("\t");
+            Serial.print(sensor_status[i][j]);
+        }
+        Serial.println();
+    }
 
     // Find minimum and maximum values in processed_data
     int min_value = INT_MAX;
@@ -180,7 +272,7 @@ int get_fill_status() {
 
 
     // Perform edge detection on padded_data
-    _convolution(padded_data, kernel_edge, 10, 10, 3, 3);
+    _convolution(padded_data[0], kernel_edge, 10, 10, 3, 3);
 
     Serial.println("\n After egde detection: ");
     for (int i = 0; i < 10; i++) {
@@ -192,15 +284,24 @@ int get_fill_status() {
     }
 
 
-
-    // crop back to sensor data size and copy the result of convolution back to processed_data. threshold it
+    // crop back to sensor data size and copy the result of convolution back to processed_data.
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
-            processed_data[i][j] = padded_data[i + 1][j + 1] < 1 ? 0 : 1;
+            processed_data[i][j] = padded_data[i + 1][j + 1];
         }
     }
 
-    Serial.println("\n After cropping and thresholding: ");
+    // populate holes in T shape with values using blur
+    _convolution(processed_data[0], kernel_blur, 8, 8, 3, 3);
+
+    // threshold it
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            processed_data[i][j] = processed_data[i][j] < 1 ? 0 : 1;
+        }
+    }
+
+    Serial.println("\n After cropping, burring and thresholding: ");
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             Serial.print("  ");
@@ -214,7 +315,8 @@ int get_fill_status() {
     // Perform pattern matching on processed_data. returns the intersection coordinates and best angle
     int intersection[2] = {0, 0};
     int best_angle = 0;
-    _patternMatching(processed_data, 8, 8, 15, 15, intersection, &best_angle);
+    int matching_score = 0;
+    _patternMatching(processed_data, 8, 8, 15, 15, intersection, &best_angle, &matching_score);
 
     Serial.print("Intersection: "); Serial.print(intersection[0]); Serial.print(", "); Serial.println(intersection[1]);
 
@@ -231,6 +333,7 @@ int get_fill_status() {
     Serial.print("x_2: "); Serial.print(x_2); Serial.print(", y_2: "); Serial.println(y_2);
     Serial.print("x_3: "); Serial.print(x_3); Serial.print(", y_3: "); Serial.println(y_3);
 
+    Serial.println("score: " + String(matching_score));
 
     int measure_at[3][2] = {
         {intersection[0] + x_1, intersection[1] + y_1},
@@ -238,7 +341,80 @@ int get_fill_status() {
         {intersection[0] + x_3, intersection[1] + y_3}
     };
 
+    int measurements_chamber_large[20] = {0};
+    int measurements_chamber_right[20] = {0};
+    int measurements_chamber_left[20] = {0};
+    int measurements_total[64] = {0};
 
+    int index_chamber_large = 0;
+    int index_chamber_right = 0;
+    int index_chamber_left = 0;
+    int index_measurements_total = 0;
+
+    char chambers[8][8] = {0};
+    memset(chambers, '.', sizeof(chambers));
+
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            if (!(sensor_status[i][j] == 5 || sensor_status[i][j] == 6 || sensor_status[i][j] == 9))
+                continue; // we skip the point if it is not a valid measurement
+
+            measurements_total[index_measurements_total++] = sensor_data[i][j];
+
+            // Translate to origin (intersection)
+            double x_sensor_frame = i - intersection[0];
+            double y_sensor_frame = j - intersection[1];
+
+            // Rotate around intersection by best_angle
+            double radians = (best_angle + 90) * M_PI / 180.0 * -1;
+            double cosA = cos(radians);
+            double sinA = sin(radians);
+
+            double x_t_frame = x_sensor_frame * cosA - y_sensor_frame * sinA;
+            double y_t_frame = x_sensor_frame * sinA + y_sensor_frame * cosA;
+
+
+            // Ensure the coordinates are within bounds
+            double distance_from_center = sqrt(x_t_frame * x_t_frame + y_t_frame * y_t_frame);
+            if (distance_from_center > 8) {
+                continue; // we cancel early if the point is outside the circle
+            }
+
+            float scaling_factor = 1.5;
+
+            bool x_in_chamber_large = true;
+            bool y_in_chamber_large = y_t_frame >= scaling_factor;
+
+            if (x_in_chamber_large && y_in_chamber_large) {
+                measurements_chamber_large[index_chamber_large++] = sensor_data[i][j];
+                chambers[i][j] = 'T';
+            }
+
+            bool x_in_chamber_right = x_t_frame >= scaling_factor;
+            bool y_in_chamber_right = y_t_frame <= -scaling_factor;
+
+            if (x_in_chamber_right && y_in_chamber_right) {
+                measurements_chamber_right[index_chamber_right++] = sensor_data[i][j];
+                chambers[i][j] = 'R';
+            }
+
+            bool x_in_chamber_left = x_t_frame <= -scaling_factor;
+            bool y_in_chamber_left = y_t_frame <= -scaling_factor;
+
+            if (x_in_chamber_left && y_in_chamber_left) {
+                measurements_chamber_left[index_chamber_left++] = sensor_data[i][j];
+                chambers[i][j] = 'L';
+            }
+        }
+    }
+
+    int median_chamber_large = calculate_median(measurements_chamber_large, index_chamber_large);
+    int median_chamber_right = calculate_median(measurements_chamber_right, index_chamber_right);
+    int median_chamber_left = calculate_median(measurements_chamber_left, index_chamber_left);
+
+    Serial.println("Median in large compartement: " + String(median_chamber_large) + " mm");
+    Serial.println("Median in small right compartement: " + String(median_chamber_right) + " mm");
+    Serial.println("Median in small left compartement: " + String(median_chamber_left) + " mm");
 
     // Adjust coordinates if they are outside the size of sensor_data
     for (int i = 0; i < 3; i++) {
@@ -246,30 +422,57 @@ int get_fill_status() {
         measure_at[i][1] = max(0, min(measure_at[i][1], 7));
     }
 
-    Serial.println("Measure at: ");
-    for (int i = 0; i < 3; i++) {
-        Serial.print("\t");
-        Serial.print(measure_at[i][0]);
-        Serial.print(", ");
-        Serial.println(measure_at[i][1]);
-    }
-
     int measurements[3] = {0};
     for (int i = 0; i < 3; i++) {
         measurements[i] = sensor_data[measure_at[i][0]][measure_at[i][1]];
     }
 
-    Serial.println("Distance in large compartement: " + String(measurements[0]) + " mm");
-    Serial.println("Distance in small right compartement: " + String(measurements[1]) + " mm");
-    Serial.println("Distance in small left compartement: " + String(measurements[2]) + " mm");
+    char points[3] = {'A', 'B', 'C'};
+    Serial.println("Singe point measure at: ");
+    for (int i = 0; i < 3; i++) {
+        Serial.print("\t");
+        Serial.print(points[i]);
+        Serial.print(": ");
+        Serial.print(measure_at[i][0]);
+        Serial.print(", ");
+        Serial.print(measure_at[i][1]);
+        Serial.print(" -> ");
+        Serial.println(measurements[i]);
+    }
 
 
-    int tank_full = 300;
-    int tank_empty = 2700;
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            Serial.print("  ");
+            if (i == intersection[0] && j == intersection[1]) {
+                Serial.print("X");
+            } else if (i == measure_at[0][0] && j == measure_at[0][1]) {
+                Serial.print("A");
+            } else if (i == measure_at[1][0] && j == measure_at[1][1]) {
+                Serial.print("B");
+            } else if (i == measure_at[2][0] && j == measure_at[2][1]) {
+                Serial.print("C");
+            } else {
+                Serial.print(chambers[i][j]);
+            }
+        }
+        Serial.println();
+    }
+
+
+    Serial.println("using median values");
+    measurements[0] = median_chamber_large;
+    measurements[1] = median_chamber_right;
+    measurements[2] = median_chamber_left;
 
     int tank_level_cm = 30 + ((measurements[0] / 10 - 30) / 2)
                         + ((measurements[1] / 10 - 30) / 4)
                         + ((measurements[2] / 10 - 30) / 4);
+
+    if (matching_score < 40) {
+        Serial.println("confidence level too low! using general median.");
+        tank_level_cm = calculate_median(measurements_total, index_measurements_total) / 10;
+    }
 
     Serial.println("Tank level: " + String(tank_level_cm) + " cm");
 
@@ -277,12 +480,12 @@ int get_fill_status() {
 }
 
 
-void _convolution(int input[10][10], int kernel[3][3], int input_rows, int input_cols, int kernel_rows, int kernel_cols) {
-    
-    int temp[10][10] = {0};
+void _convolution(int* input, int kernel[3][3], int input_rows, int input_cols, int kernel_rows, int kernel_cols) {
+
+    int temp[input_rows][input_cols] = {0};
     for (int i = 0; i < input_rows; i++) {
         for (int j = 0; j < input_cols; j++) {
-            temp[i][j] = input[i][j];
+            temp[i][j] = input[i * input_cols + j];
         }
     }
 
@@ -298,15 +501,15 @@ void _convolution(int input[10][10], int kernel[3][3], int input_rows, int input
                     }
                 }
             }
-            input[i][j] = convolute_result;
+            input[i * input_cols + j] = convolute_result;
         }
     }
 }
 
 
 
-void _patternMatching(int input[8][8], int input_rows, int input_cols, int pattern_rows, int pattern_cols, int* intersection, int* best_angle) {
-    int highest_score = 0;
+void _patternMatching(int input[8][8], int input_rows, int input_cols, int pattern_rows, int pattern_cols, int* intersection, int* best_angle, int* highest_score) {
+    *highest_score = 0;
     *best_angle = -1;
     int coord_intersection[] = {0, 0};
 
@@ -325,8 +528,8 @@ void _patternMatching(int input[8][8], int input_rows, int input_cols, int patte
                         }
                     }
                 }
-                if (convolute_result > highest_score) {
-                    highest_score = convolute_result;
+                if (convolute_result > *highest_score) {
+                    *highest_score = convolute_result;
                     *best_angle = angle;
                     coord_intersection[0] = i;
                     coord_intersection[1] = j;
@@ -357,15 +560,15 @@ void _patternMatching(int input[8][8], int input_rows, int input_cols, int patte
 
 
 void _rotate(int input[PATTERN_SIZE][PATTERN_SIZE], int output[PATTERN_SIZE][PATTERN_SIZE], double angle) {
-    double radians = angle * M_PI / 180.0;
+    double radians = angle * M_PI / 180.0 * -1; // needs to be for some reason, other wise rotates clockwise
     double cosA = cos(radians);
     double sinA = sin(radians);
     
     double centerX = (PATTERN_SIZE - 1) / 2.0;
     double centerY = (PATTERN_SIZE - 1) / 2.0;
 
-    for (int x = 0; x < PATTERN_SIZE; ++x) {
-        for (int y = 0; y < PATTERN_SIZE; ++y) {
+    for (int x = 0; x < PATTERN_SIZE; x++) {
+        for (int y = 0; y < PATTERN_SIZE; y++) {
             // Translate to origin
             double x0 = x - centerX;
             double y0 = y - centerY;
